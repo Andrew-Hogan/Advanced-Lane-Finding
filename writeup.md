@@ -18,8 +18,13 @@ The goals / steps of this project are the following:
 [image3]: ./lanelineimgs/binary.png "Binary Example"
 [image4]: ./lanelineimgs/straightlinepersp.png "Warp Example"
 [image5]: ./lanelineimgs/lanefit.png "Fit Visual"
+<<<<<<< HEAD
 [image6]: ./lanelineimgs/finaloutput.jpg "Output"
 [video1]: ./project_video.avi "Video"
+=======
+[image6]: ./lanelineimgs/example_output.jpg "Output"
+[video1]: ./project_video.mp4 "Video"
+>>>>>>> origin/master
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 ###Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
