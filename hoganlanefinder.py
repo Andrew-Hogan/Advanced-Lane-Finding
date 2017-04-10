@@ -2,10 +2,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-from PIL import Image
-from PIL import ImageFont
-from PIL import ImageDraw
-##The main function is near the bottom. Image plotting/showing used during testing has been commented out for batch rendering purposes (imagine closing 616 x 6 popups by hand?)
+##The main function is near the bottom. Image plotting/showing used during testing has been commented out for batch rendering purposes
 
 
 ##This function finds the chessboard corners used in undistorting images taken by this camera lens within the perspective_shift function
@@ -38,18 +35,19 @@ def warp_image(img,src,dst,img_size):
 
     return warped,M,Minv
 
-##This function isolates lane lines by enforcing multiple color threshholds and turning off all pixels which do not meet the criteria
+##This function isolates lane lines by enforcing multiple color threshholds (R and S channels) and turning off all pixels which do not meet the criteria
 def colorthresh(img):
     R = img[:,:,0]
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS).astype(np.float)
     S = hls[:,:,2]
-    thresh = (90, 255)
+    thresh = (30, 255)
+    rthresh = (120, 255)
     binary = np.zeros_like(S)
-    binary[(S > thresh[0]) & (S <= thresh[1]) & (R > thresh[0]) & (R <= thresh[1]) ] = 1
+    binary[(S > thresh[0]) & (S <= thresh[1]) & (R > rthresh[0]) & (R <= rthresh[1]) ] = 1
     #cv2.imshow("test color", binary)
     return binary
 
-##This is the function which takes an image along with chessboard corners for a given lens and returns a birds eye binary view of the lane lines - it references colorthresh and warp_image
+##This is the function which takes an image along with distortion correction coefficients and returns a birds eye binary view of the lane lines - it references colorthresh() and warp_image()
 def perspective_shift(img, mtx, dist):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     undistort = cv2.undistort(img, mtx, dist, None, mtx) ##here is where the undistorted image is produced
@@ -57,18 +55,18 @@ def perspective_shift(img, mtx, dist):
     
     src = np.float32(##defining source points
         [
-            (780, 500),  # top right
-            (1140, 700),  # bottom right
+            (689, 453),  # top right
+            (1068, 700),  # bottom right
             (204, 700),  # bottom left
-            (516, 500)  # top left
+            (589, 453)  # top left
         ]
     )
     offset = 250
     #plt.imshow(undistort)
-    #plt.plot(780, 500, '.')
-    #plt.plot(1140, 700, '.')
+    #plt.plot(689, 453, '.')
+    #plt.plot(1068, 700, '.')
     #plt.plot(204, 700, '.')
-    #plt.plot(516, 500, '.')
+    #plt.plot(589, 453, '.')
     #plt.show()
     dst = np.float32(##defining destination points
         [
@@ -83,56 +81,52 @@ def perspective_shift(img, mtx, dist):
     
     return warped, M, Minv_warp, undistort
 
-##finds the curve radius for a lane line image
-def findcurve(left_fit, right_fit):
+##finds the curve radius for each lane line given x coordinates for each line
+def findcurve(left_fitx, right_fitx):
     ploty = np.linspace(0, 719, num=720)# to cover same y-range as image
-    # For each y position generate random x position within +/-50 pix
-    # of the line base position in each case (x=200 for left, and x=900 for right)
-    leftx = np.array([left_fit[2] + (y**2)*left_fit[0] + (y)*left_fit[1] + np.random.randint(-50, high=51) 
-                              for y in ploty])
-    rightx = np.array([right_fit[2] + (y**2)*right_fit[0] + (y)*right_fit[1] + np.random.randint(-50, high=51) 
-                              for y in ploty])
 
-    # Fit a second order polynomial to pixel positions in each lane line
-    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
-
-    # Plot up the data
+    # Plot for testing
     #mark_size = 3
-    #plt.plot(leftx, ploty, 'o', color='red', markersize=mark_size)
-    #plt.plot(rightx, ploty, 'o', color='blue', markersize=mark_size)
+    #left_fit = np.polyfit(ploty, left_fitx, 2)
+    #right_fit = np.polyfit(ploty, right_fitx, 2)
+    #plt.plot(left_fitx, ploty, 'o', color='red', markersize=mark_size)
+    #plt.plot(right_fitx, ploty, 'o', color='blue', markersize=mark_size)
     #plt.xlim(0, 1280)
     #plt.ylim(0, 720)
-    #plt.plot(left_fitx, ploty, color='green', linewidth=3)
-    #plt.plot(right_fitx, ploty, color='green', linewidth=3)
+    #plt.plot(left_fit, ploty, color='green', linewidth=3)
+    #plt.plot(right_fit, ploty, color='green', linewidth=3)
     #plt.gca().invert_yaxis() # to visualize as we do the images
     #plt.show()
+    
     # Define y-value where we want radius of curvature
     y_eval = np.max(ploty)
-    left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
-    right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
-    print(left_curverad, right_curverad) ##output the radius
+    
+    #left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+    #right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+    #print(left_curverad, right_curverad) ##output the radius
 
     # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 30/720 # meters per pixel in y dimension
+    ym_per_pix = 50/720 # meters per pixel in y dimension
     xm_per_pix = 3.7/700 # meters per pixel in x dimension
 
     # Fit new polynomials to x,y in world space
-    left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-    right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
+    left_fit_cr = np.polyfit(ploty*ym_per_pix, left_fitx*xm_per_pix, 2)
+    right_fit_cr = np.polyfit(ploty*ym_per_pix, right_fitx*xm_per_pix, 2)
     # Calculate the new radii of curvature
     left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
     right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
     # Output the radius in meters
     print(left_curverad, 'm', right_curverad, 'm')
 
-    return left_fitx, right_fitx, left_curverad, right_curverad
+    return left_curverad, right_curverad
 
-#This function finds where the lane lines start at the bottom of a binary birds-eye image, calculates a polynomial regression for that lane line, and then references findcurve to find the curve radius
+#This function finds where the lane lines start at the bottom of a binary top-perspective image using a histrogram,
+#calculates the distance from center using that assumption, uses sliding windows to categorize lane pixels,
+#calculates a polynomial regression for those categorized pixels, and then generates x points for each lane given that poly fit
 def findstart(binary_warped):
     histogram = np.sum(binary_warped[binary_warped.shape[0]/2:,:], axis=0) #histogram of most frequent pixel locations in binary image
     # Create an output image to draw on and  visualize the result - the actual showing part of this code has been commented out for batch rendering purposes
-    out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
+    #out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
     
     midpoint = np.int(histogram.shape[0]/2)
     leftx_base = np.argmax(histogram[:midpoint])
@@ -141,8 +135,8 @@ def findstart(binary_warped):
     #find car's location relative to center line through averaging histogram density locations versus expected lane line locations given perfect center driving
     shift = leftx_base - 250
     shift2 = rightx_base - (histogram.shape[0] - 250)
-    print (shift)
-    print (shift2)
+    #print (shift)
+    #print (shift2)
     xm_per_pix = 3.7/700
     lanedif = abs(shift - shift2)
         
@@ -180,8 +174,8 @@ def findstart(binary_warped):
         win_xright_low = rightx_current - margin
         win_xright_high = rightx_current + margin
         # Draw the windows on the visualization image
-        cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 2) 
-        cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 2) 
+        #cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 2) 
+        #cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 2) 
         # Identify the nonzero pixels in x and y within the window
         good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
         good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
@@ -209,12 +203,12 @@ def findstart(binary_warped):
     right_fit = np.polyfit(righty, rightx, 2)
 
     # Generate x and y values for plotting
-    #ploty = np.linspace(0, binary_warped.shape[0]-1, binary_warped.shape[0] )
-    #left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-    #right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+    ploty = np.linspace(0, 719, num=720)# to cover same y-range as image
+    left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+    right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
     
-    out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-    out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+    #out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
+    #out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
     #plt.imshow(out_img)
     #plt.plot(left_fitx, ploty, color='yellow')
     #plt.plot(right_fitx, ploty, color='yellow')
@@ -222,9 +216,7 @@ def findstart(binary_warped):
     #plt.ylim(720, 0)
     #plt.show()
 
-    leftx, rightx, cl, cr = findcurve(left_fit, right_fit) ##finds the curve radius
-
-    return leftx, rightx, lanedif, shift, cl, cr
+    return left_fitx, right_fitx, lanedif, shift
 
 # This function draws the lane lines on the final output image
 def drawlines(left_fitx, right_fitx, img, Minv, image, undist):
@@ -249,40 +241,40 @@ def drawlines(left_fitx, right_fitx, img, Minv, image, undist):
     #plt.show()
     return result
 
-
-##Start of main
-objpoints, imgpoints = findcal(20) ##calibration points
+##Start of main##
 
 firstrun = True #Used to define whether to incorporate previous lane line predictions
-vid = cv2.VideoCapture('project_video.mp4') #Video file to be analyzed
+img = cv2.imread('test_images/test2.jpg') #For single image instead of video - used for img_size
+img_size = (img.shape[1], img.shape[0])
+objpoints, imgpoints = findcal(20) ##calibration points
+ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None) ##Find camera calibration coefficients
+
 counter = 0 #Output batch number
-
+vid = cv2.VideoCapture('project_video.mp4') #Video file to be analyzed
 while(True): #vid.read returns False at the end of a sample video
-    #img = cv2.imread('test_images/test6.jpg') #For single images instead of video
     ret, img = vid.read()
-    img_size = (img.shape[1], img.shape[0])
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None) ##Find camera calibration coefficients
-
+    #img = cv2.imread('test_images/straight_lines1.jpg') #For single images instead of video
     warped, persp, Minv_warp, undist = perspective_shift(img, mtx, dist) ##Creates a binary birds eye view of the image
     #cv2.imshow("test", warped)
 
     tolerance = 100 #How much of a difference in predicted lane line relative positioning versus expected relative positioning is allowed
-    newleft, newright, dif, pos, cl, cr = findstart(warped) #Finds the lane lines and polynomial fit
+    newleft, newright, dif, pos = findstart(warped) #Finds the lane lines and polynomial fit
     if firstrun == True: ##If there is no previous data then we take the lane line prediction regardless
         laneleft = newleft
         laneright = newright
         firstrun = False
-    elif dif < tolerance: ##If it is not within tolerance of expected values then we use only the previous prediction
+    elif dif < tolerance: ##If it is not within tolerance of expected values then we use only the previous predictions
         laneleft = np.sum([(laneleft * .9),(newleft * .1)], axis=0)
         laneright = np.sum([(laneright * .9), (newright * .1)], axis=0)
-
+    cl, cr = findcurve(laneleft, laneright) ##find the curve radius for weighted line
 
     final_img = drawlines(laneleft, laneright, warped,Minv_warp, img, undist) ##Draw the lane & lines on the image
     final_img = cv2.cvtColor(final_img, cv2.COLOR_BGR2RGB) #Change format for image saving
-    cv2.imwrite('./video_render_nonumbers/video_' + str(int(counter)) + '.jpg', final_img)
-    current_img = Image.open('./video_render_nonumbers/video_' + str(int(counter)) + '.jpg')#take lane image and superimpose the lane radius curvature for the predicted lanes and distance from center
-    draw = ImageDraw.Draw(current_img)
-    font = ImageFont.load_default()
-    draw.text((0,0),"Left Curve Radius: " + str(cl) + " m;   Vehicle Distance from center: " + str(pos) + " m;   Right Curve Radius: " + str(cr) + " m", (255,255,255), font = font)
-    current_img.save('./video_render/video_' + str(int(counter)) + '.jpg')
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(final_img, "Left Curve Radius: " + str(cl) + " m;", (20,30), font, 1, (255,255,255), 1)
+    cv2.putText(final_img, "Vehicle Distance from center: " + str(pos) + " m;", (20,60), font, 1, (255,255,255), 1)
+    cv2.putText(final_img, "Right Curve Radius: " + str(cr) + " m", (20,90), font, 1, (255,255,255), 1)
+    cv2.imwrite('./video_render/video_' + str(counter) + '.jpg', final_img)
+
     counter += 1 #For next batch sample
+    #print (counter)
